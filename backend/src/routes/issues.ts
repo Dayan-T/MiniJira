@@ -43,5 +43,23 @@ router.delete("/:project_id/:issue_id", async (req:any, res:any) => {
   }
 });
 
+router.put("/:project_id/:issue_id",async (req:any, res:any) => {
+  try {
+    const { title, status, priority,description,assignee_id }= req.body;
+    const { project_id, issue_id } = req.params;
+    const result = await pool.query(
+      "UPDATE issues SET title = $1, status = $2, priority = $3, description = $4, assignee_id = $5 WHERE project_id = $6 AND id = $7 RETURNING *",
+      [title, status, priority, description, assignee_id, project_id, issue_id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "issue not found" });
+    }
+    return res.json({ message: "issue updated successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
 export default router;  
 

@@ -49,4 +49,22 @@ router.delete("/:project_id/:user_id", async (req:any, res:any) => {
   }
 });
 
+router.put("/:project_id/:user_id",async (req:any, res:any) => {
+  try{
+    const { role } = req.body;
+    const{ project_id, user_id } = req.params;
+    const result = await pool.query(
+      "UPDATE project_members SET role = $1 WHERE project_id = $2 AND user_id = $3 RETURNING *",
+      [role, project_id, user_id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "project member not found" });
+    }
+    return res.json({ message: "project member updated successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
 export default router;  

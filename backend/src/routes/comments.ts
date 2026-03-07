@@ -31,7 +31,7 @@ router.delete("/:issue_id/:comment_id", async (req:any, res:any) => {
   try {
     const { issue_id, comment_id } = req.params;
     const result = await pool.query(
-      "DELETE FROM comments WHERE issue_id = $1 AND id = $2 RETURNING *",
+      "DELETE FROM comments WHERE issue_id = $1 AND comment_id = $2 RETURNING *",
       [issue_id, comment_id]
     );
     if (result.rowCount === 0) {
@@ -40,6 +40,24 @@ router.delete("/:issue_id/:comment_id", async (req:any, res:any) => {
     return res.json({ message: "comment deleted successfully" });
 }
   catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+router.put("/:issue_id/:comment_id",async (req:any, res:any) => {
+  try {
+    const { content } = req.body;
+    const { issue_id, comment_id } = req.params;
+    const result = await pool.query(
+      "UPDATE comments SET content = $1 WHERE issue_id = $2 AND comment_id = $3 RETURNING *",
+      [content, issue_id, comment_id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "comment not found" });
+    }
+    return res.json({ message: "comment updated successfully" });
+  } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Database error" });
   }

@@ -1,0 +1,21 @@
+import * as db from "../db/db";
+
+const pool = db.default.pool;
+
+export const userRepository = {
+  async findByEmail(email) {
+    const result = await pool.query(
+      "SELECT * FROM users WHERE email = $1",
+      [email]
+    );
+    return result.rows[0] || null;
+  },
+
+  async createUser(email, password_hash) {
+    const result = await pool.query(
+      "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING user_id, email, password_hash",
+      [email, password_hash]
+    );
+    return result.rows[0];
+  },
+};

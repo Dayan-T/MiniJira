@@ -3,7 +3,7 @@ const router = Router();
 import { pool } from "../db/db.js";  
 
 
-router.get("/", async (req:any, res:any) => {
+router.get("/", async (_req:any, res:any) => {
   try {
     const result = await pool.query("SELECT * FROM users");
     res.json(result.rows);
@@ -42,6 +42,24 @@ router.delete("/:user_id", async (req:any, res:any) => {
 
 }
   catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+router.put("/:user_id", async (req:any, res:any) => {
+  try {
+    const { email, password_hash } = req.body;
+    const { user_id } = req.params;
+    const result = await pool.query(
+      "UPDATE users SET email = $1, password_hash = $2 WHERE user_id = $3 RETURNING *",
+      [email, password_hash, user_id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    return res.json({ message: "User updated successfully" });
+  } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Database error" });
   }
