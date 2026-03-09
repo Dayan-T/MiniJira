@@ -1,6 +1,7 @@
 import{ Router } from "express";
 const router = Router();
 import { pool } from "../db/db.js"; 
+import { requireAuth } from "../middleware/authMiddleware.js";
 
 router.get("/", async (req:any, res:any) => {
   try {
@@ -13,12 +14,24 @@ router.get("/", async (req:any, res:any) => {
     res.status(500).json({ error: "Database error" });
   }
 });
-router.post("/", async (req:any, res:any) => {
+
+router.post("/",requireAuth, async (req:any, res:any) => {
+  const { issue_id, content } = req.body;
+  const projectId = await pool.query("SELECT project_id FROM issues WHERE issue_id = $1", [issue_id]);
+  if (projectId.rows.length === 0) {
+    return res.status(404).json({ error: "Issue not found" });
+  }
+  const projectmembership = await pool.query(
+    "SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2", 
+    [projectId.rows[0].project_id, req.user.id]
+  );
+  if (!projectmembership.rows[0]) {
+    return res.status(403).json({ error: "Forbidden: You must be a project member to comment" });
+  }
   try {
-    const { issue_id, content, author_id } = req.body;
     const result = await pool.query(
       "INSERT INTO comments (issue_id, content, author_id) VALUES ($1, $2, $3) RETURNING *",
-      [issue_id, content, author_id]
+      [issue_id, content, req.user.id]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -49,6 +62,20 @@ router.put("/:issue_id/:comment_id",async (req:any, res:any) => {
   try {
     const { content } = req.body;
     const { issue_id, comment_id } = req.params;
+    const issueResult = await pool.query(
+        "SELECT project_id FROM issues i JOIN comments c ON i.issue_id = c.issue_id WHERE c.comment_id = $1",
+        [comment_id]
+      );
+      if (issueResult.rows.length === 0) {
+    return res.status(404).json({ error: "Comment not found" });
+    }
+    const projectmembership = await pool.query(
+      "SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2", 
+      [issueResult.rows[0].project_id, req.user.id]
+    );
+    if (!projectmembership.rows[0]) {
+      return res.status(403).json({ error: "Forbidden: You must be a project member" });
+    };
     const result = await pool.query(
       "UPDATE comments SET content = $1 WHERE issue_id = $2 AND comment_id = $3 RETURNING *",
       [content, issue_id, comment_id]

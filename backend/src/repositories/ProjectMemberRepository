@@ -1,0 +1,13 @@
+import * as db from "../db/db";
+
+const pool = (db as any).default.pool;
+
+export const projectMembersRepository = {
+  async findByProjectAndUser(projectId: string, userId: string) {
+    const result = await pool.query(
+      "SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2",
+      [projectId, userId]
+    );
+    return result.rows[0] || null;
+  },
+};

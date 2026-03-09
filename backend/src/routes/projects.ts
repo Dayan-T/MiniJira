@@ -1,8 +1,10 @@
 import{ Router } from "express";
 const router = Router();
 import { pool } from "../db/db.js"; 
+import { requireAuth } from "../middleware/authMiddleware.js";
+import { ProjectMembersRepository } from "../repositories/ProjectMemberRepository.js";
 
-router.get("/", async (_req:any, res:any) => {
+router.get("/",requireAuth, async (_req:any, res:any) => {
   try {
     const result = await pool.query("SELECT * FROM projects");
     res.json(result.rows);
@@ -12,7 +14,7 @@ router.get("/", async (_req:any, res:any) => {
   }
 });
 
-router.post("/", async (req:any, res:any) => {
+router.post("/",requireAuth, async (req:any, res:any) => {
   try {
     const { name, description, owner_id } = req.body;
     const result = await pool.query(
@@ -26,9 +28,17 @@ router.post("/", async (req:any, res:any) => {
   }
 });
 
-router.delete("/:project_id", async (req:any, res:any) => {
+router.delete("/:project_id", requireAuth,async (req:any, res:any) => {
+  const user = (req as any).user;
+  const userID = user.id;
+  const { project_id } = req.params;
+
   try {
-    const { project_id } = req.params;
+
+    const membership= await ProjectMembersRepository.findByProjectAndUser(project_id, userID);
+    if (!membership||membership.role!=="owner") {
+      return res.status(403).json({ error: "Forbidden: Only project owners can delete the project" });
+
     const result = await pool.query(
       "DELETE FROM projects WHERE id = $1 RETURNING *",
       [project_id]
@@ -37,16 +47,24 @@ router.delete("/:project_id", async (req:any, res:any) => {
       return res.status(404).json({ error: "Project not found" });
     }
     res.json({message: "Project removed successfully"});
-  } catch (error) {
+  }} catch (error) {
     console.error(error);
     res.status(500).json({ error: "Database error" });
   } 
 });
 
-router.put("/:project_id", async (req:any, res:any) => {
+router.put("/:project_id",requireAuth, async (req:any, res:any) => {
+  const user = (req as any).user;
+  const userID = user.id;
+  const { project_id } = req.params;
+
   try {
+
+    const membership= await ProjectMembersRepository.findByProjectAndUser(project_id, userID);
+    if (!membership) {
+      return res.status(403).json({ error: "Forbidden: Only project members can modify the project" });
+    }
     const { name, description } = req.body;
-    const { project_id } = req.params;
     const result = await pool.query(
       "UPDATE projects SET name = $1, description = $2 WHERE project_id = $3 RETURNING *",
       [name, description, project_id]

@@ -1,13 +1,15 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { userRepository } from "../repositories/userRepository";
+import jwt from "jsonwebtoken";
+
 
 
 const router = Router();
 
 router.post("/register", async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body; // ← password CLAIR
+    const { email, password } = req.body; // password clair
     
     //Vérifie email existe PAS
     const existingUser = await userRepository.findByEmail(email);
@@ -46,17 +48,26 @@ router.post("/login", async (req: Request, res: Response) => {
     if (!isValidPassword) {
       return res.status(401).json({ error: "Invalid username  or password" });
     }
+
+    //Génère JWT
+    const token = jwt.sign(
+  { userId: user.user_id, email: user.email },
+  process.env.JWT_SECRET!,
+  { expiresIn: process.env.JWT_EXPIRES_IN || "1h" }
+);
     
-    // TODO: générer JWT
-    res.status(200).json({ 
-      message: "Login successful",
-      user: { id: user.user_id, email: user.email },
-      token: "TODO-jwt-token"
-    });
-  } catch (error) {
+    
+    res.status(200).json({
+  message: "Login successful",
+  user: { id: user.user_id, email: user.email },
+  token,
+});
+  }
+    catch (error) {
     console.error("Error in /auth/login:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 export default router;
+  
