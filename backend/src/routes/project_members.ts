@@ -1,6 +1,6 @@
 import { Router } from "express";
 const router = Router();
-import { pool } from "../db/db.js"; 
+import { pool } from "../db/db"; 
 import { requireAuth } from "../middleware/authMiddleware.js";
 
 router.get("/projects/:project_id/members",requireAuth,async (req: any, res: any) => {
@@ -28,24 +28,26 @@ router.get("/projects/:project_id/members",requireAuth,async (req: any, res: any
   }
 });
 
-router.post("/",requireAuth,async (req:any, res:any) => {
+router.post("/project_members", requireAuth, async (req: any, res: any) => {
   try {
-    const { project_id, user_id, role } = req.params;
-    const userId = req.user.id;
-    const ownerCheck = await pool.query(
-      "SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2 AND role = 'owner'",
-      [project_id, userId]);
-    if (ownerCheck.rows.length === 0) {
-      return res.status(403).json({
-        error: "Forbidden: Only project owners can add members to this project",
-      });
+    const ownerId = req.user.id;  
+    const { projectId, userId } = req.body;
+
+    const project = await pool.query(
+      "SELECT project_id FROM projects WHERE project_id = $1 AND owner_id = $2",
+      [projectId, ownerId]
+    );
+
+    if (project.rows.length === 0) {
+      return res.status(403).json({ error: "Not allowed to add members to this project" });
     }
     const result = await pool.query(
-      `INSERT INTO project_members (project_id, user_id, role) 
-       VALUES ($1, $2, $3) 
+      `INSERT INTO project_members (project_id, user_id, role)
+       VALUES ($1, $2, $3)
        RETURNING project_id, user_id, role`,
-      [project_id, user_id, role]
+      [projectId, userId, "MEMBER"]  
     );
+
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error(error);
@@ -53,12 +55,13 @@ router.post("/",requireAuth,async (req:any, res:any) => {
   }
 });
 
+
 router.delete("/:project_id/:user_id",requireAuth, async (req:any, res:any) => {
   try { 
       const { project_id, user_id } = req.params;
       const userId = req.user.id;
       const ownerCheck = await pool.query(
-        "SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2 AND role = 'owner'",
+        "SELECT * FROM project_members WHERE project_id = $1 AND user_id = $2 AND role = 'OWNER'",
         [project_id, userId]
       );
       if (ownerCheck.rows.length === 0) {

@@ -1,6 +1,6 @@
 import{ Router } from "express";
 const router = Router();
-import { pool } from "../db/db.js"; 
+import { pool } from "../db/db"; 
 import { requireAuth } from "../middleware/authMiddleware.js";
 
 router.get("/",requireAuth, async (req:any, res:any) => {

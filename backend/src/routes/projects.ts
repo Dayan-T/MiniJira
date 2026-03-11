@@ -1,12 +1,12 @@
 import{ Router } from "express";
 const router = Router();
-import { pool } from "../db/db.js"; 
+import { pool } from "../db/db"; 
 import { requireAuth } from "../middleware/authMiddleware.js";
-import { ProjectMembersRepository } from "../repositories/ProjectMemberRepository.js";
+import { ProjectMembersRepository } from "../repositories/ProjectMemberRepository";
 
 router.get("/",requireAuth, async (req:any, res:any) => {
   try {
-    const result = await pool.query("SELECT p.* FROM projects JOIN project_members pm ON p.project_id = pm.project_id WHERE pm.user_id = $1", [(req as any).user.id]);
+    const result = await pool.query("SELECT p.* FROM projects p JOIN project_members pm ON p.project_id = pm.project_id WHERE pm.user_id = $1", [(req as any).user.id]);
     res.json(result.rows);
   } catch (error) {
     console.error(error);
@@ -15,6 +15,8 @@ router.get("/",requireAuth, async (req:any, res:any) => {
 });
 
 router.post("/",requireAuth, async (req:any, res:any) => {
+  //console.log("REQ.USER /projects =", req.user);
+
   try {
     const { name, description } = req.body;
     const owner_id = req.user.id
@@ -23,12 +25,19 @@ router.post("/",requireAuth, async (req:any, res:any) => {
       "INSERT INTO projects (name, description, owner_id) VALUES ($1, $2, $3) RETURNING *",
       [name, description, owner_id]
     );
+    const result1 = await pool.query(
+      "INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3) RETURNING *",
+      [result.rows[0].project_id, owner_id, "OWNER"]
+    );
     res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Database error" });
   }
 });
+
+
+
 
 router.delete("/:project_id", requireAuth,async (req:any, res:any) => {
   const user = (req as any).user;
