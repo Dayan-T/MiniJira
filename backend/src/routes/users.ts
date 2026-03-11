@@ -1,25 +1,94 @@
 import{ Router } from "express";
+import jwt from "jsonwebtoken";
 const router = Router();
 import { pool } from "../db/db.js";  
+import { requireAuth } from "../middleware/authMiddleware.js";
+import bcrypt from "bcrypt";
 
 
-router.get("/", async (_req:any, res:any) => {
+router.get("/me",requireAuth, async (req:any, res:any) => {
   try {
-    const result = await pool.query("SELECT * FROM users");
-    res.json(result.rows);
+    const userId= req.user.id;
+    const result = await pool.query("SELECT * FROM users Where user_id = $1", [userId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json(result.rows[0]);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Database error" });
   }
 });
 
-router.post("/s", async (req:any, res:any) => {
+router.post("/signup", async (req: any, res: any) => {
   try {
-    const { email, password_hash } = req.body;
+    const { email, password } = req.body;
+    const existing = await pool.query(
+      "SELECT id FROM users WHERE email = $1",
+      [email]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: "Email already in use" });
+    }
+    const password_hash = await bcrypt.hash(password, 10);
+
     const result = await pool.query(
       "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email",
       [email, password_hash]
     );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+router.post("/login", async (req: any, res: any) => {
+  try {
+    const { email, password } = req.body;
+
+    const result = await pool.query(
+      "SELECT id, email, password_hash FROM users WHERE email = $1",
+      [email]
+    );
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const user = result.rows[0];
+
+    const isValid = await bcrypt.compare(password, user.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "7d" }
+    );
+
+    res.json({ token });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+router.put("/me", requireAuth, async (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const { email ,username } = req.body;
+
+    const result = await pool.query(
+      "UPDATE users SET email = $1, username = $2 WHERE id = $3 RETURNING id, email, username",
+      [email, username, userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -28,37 +97,34 @@ router.post("/s", async (req:any, res:any) => {
   }
 });
 
-router.delete("/:user_id", async (req:any, res:any) => {
+router.put("/me/password", requireAuth, async (req: any, res: any) => {
   try {
-    const { user_id } = req.params;
-    const result = await pool.query(
-      "DELETE FROM users WHERE user_id = $1 RETURNING *",
-      [ user_id]
-    );
-    if (result.rowCount === 0) {
-    return res.status(404).json({ error: "User not found" });
-  } 
-    return res.json({ message: "User deleted successfully" });
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
 
-}
-  catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Database error" });
-  }
-});
-
-router.put("/:user_id", async (req:any, res:any) => {
-  try {
-    const { email, password_hash } = req.body;
-    const { user_id } = req.params;
     const result = await pool.query(
-      "UPDATE users SET email = $1, password_hash = $2 WHERE user_id = $3 RETURNING *",
-      [email, password_hash, user_id]
+      "SELECT password_hash FROM users WHERE id = $1",
+      [userId]
     );
-    if (result.rowCount === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "User not found" });
     }
-    return res.json({ message: "User updated successfully" });
+
+    const user = result.rows[0];
+
+    const isValid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isValid) {
+      return res.status(400).json({ error: "Current password is incorrect" });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+
+    await pool.query(
+      "UPDATE users SET password_hash = $1 WHERE id = $2",
+      [newHash, userId]
+    );
+
+    res.json({ message: "Password updated successfully" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Database error" });

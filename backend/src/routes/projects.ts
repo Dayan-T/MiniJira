@@ -4,9 +4,9 @@ import { pool } from "../db/db.js";
 import { requireAuth } from "../middleware/authMiddleware.js";
 import { ProjectMembersRepository } from "../repositories/ProjectMemberRepository.js";
 
-router.get("/",requireAuth, async (_req:any, res:any) => {
+router.get("/",requireAuth, async (req:any, res:any) => {
   try {
-    const result = await pool.query("SELECT * FROM projects");
+    const result = await pool.query("SELECT p.* FROM projects JOIN project_members pm ON p.project_id = pm.project_id WHERE pm.user_id = $1", [(req as any).user.id]);
     res.json(result.rows);
   } catch (error) {
     console.error(error);
@@ -16,7 +16,9 @@ router.get("/",requireAuth, async (_req:any, res:any) => {
 
 router.post("/",requireAuth, async (req:any, res:any) => {
   try {
-    const { name, description, owner_id } = req.body;
+    const { name, description } = req.body;
+    const owner_id = req.user.id
+    
     const result = await pool.query(
       "INSERT INTO projects (name, description, owner_id) VALUES ($1, $2, $3) RETURNING *",
       [name, description, owner_id]
